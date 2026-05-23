@@ -59,6 +59,10 @@ export default function SignupPage() {
         method: 'POST',
         body: JSON.stringify(form),
       });
+      // Wipe any cache that belonged to a previous user before priming
+      // ['me'] with the new one — otherwise the new user sees stale data
+      // on first render.
+      qc.clear();
       qc.setQueryData(['me'], res.user);
       navigate('/planner', { replace: true });
     } catch (e: any) {

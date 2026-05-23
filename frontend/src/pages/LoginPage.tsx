@@ -21,6 +21,8 @@ export default function LoginPage() {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
+      // Drop any previous user's cached data before priming this user's.
+      qc.clear();
       qc.setQueryData(['me'], res.user);
       navigate('/planner', { replace: true });
     } catch (e: any) {

@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { BlogIdea, SessionRow } from '../../api/types';
 
 export default function BlogIdeaCard({ idea }: { idea: BlogIdea }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const startSession = useMutation({
     mutationFn: async () => {
       return api<{ session: SessionRow }>('/api/sessions', {
@@ -12,7 +13,11 @@ export default function BlogIdeaCard({ idea }: { idea: BlogIdea }) {
         body: JSON.stringify({ blog_idea_id: idea.id }),
       });
     },
-    onSuccess: (res) => navigate(`/sessions/${res.session.id}`),
+    onSuccess: (res) => {
+      // Prime the sidebar so the new session appears immediately
+      qc.invalidateQueries({ queryKey: ['sessions-list'] });
+      navigate(`/sessions/${res.session.id}`);
+    },
   });
 
   return (

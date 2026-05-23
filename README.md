@@ -33,6 +33,9 @@ full design rationale.
 
 ## Setup
 
+> **Reviewing from a zip file?** See [SETUP.md](SETUP.md) for a step-by-step
+> walkthrough aimed at first-time reviewers (5 min from unzip to running app).
+
 ```bash
 # 1. Clone & enter
 git clone <repo> relix-writer && cd relix-writer

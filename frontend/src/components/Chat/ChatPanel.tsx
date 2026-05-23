@@ -49,7 +49,7 @@ export default function ChatPanel({ title, emptyHint, messages, streaming, onSen
         {messages.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
             {m.toolCalls.length > 0 && m.role === 'assistant' && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 6 }}>
                 {m.toolCalls.map((c) => <ToolCallChip key={c.tool_use_id} call={c} />)}
               </div>
             )}

@@ -65,11 +65,17 @@ export type AgentEvent =
   | { event: 'error'; data: { message: string } };
 
 // === Local chat-rendering shape ===
+export interface WebSearchResult {
+  title?: string | null;
+  url?: string | null;
+  page_age?: string | null;
+}
+
 export interface ToolCall {
   tool_use_id: string;
   tool_name: string;
   input?: Record<string, unknown>;
-  output?: unknown;
+  output?: any;
   status: 'running' | 'done' | 'error';
   server_side?: boolean;
 }

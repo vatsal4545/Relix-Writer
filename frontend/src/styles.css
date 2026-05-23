@@ -231,17 +231,94 @@ a:hover { text-decoration: underline; }
 }
 .dna-icon:hover { background: var(--surface-2); }
 
+.tool-chip-wrap {
+  display: block;
+  margin: 6px 0;
+}
 .tool-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 6px 0;
   padding: 6px 10px;
   border-radius: 999px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-dim);
+}
+.tool-chip.expandable {
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.12s ease;
+}
+.tool-chip.expandable:hover {
+  border-color: var(--accent);
+}
+.tool-chip .detail {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-chip .ws-count {
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--accent);
+}
+.tool-chip .ws-query-running {
+  margin-left: 4px;
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.ws-results-panel {
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.ws-results-header {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.ws-results-header code {
+  background: rgba(124, 92, 255, 0.15);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.ws-results-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ws-results-list li {
+  line-height: 1.35;
+}
+.ws-results-list a {
+  color: var(--text);
+  font-weight: 500;
+}
+.ws-results-list a:hover {
+  color: var(--accent-2);
+}
+.ws-result-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.ws-results-empty {
+  color: var(--text-dim);
+  font-style: italic;
 }
 .tool-chip .dot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--warn);

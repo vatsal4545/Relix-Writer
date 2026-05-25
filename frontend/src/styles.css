@@ -488,6 +488,60 @@ a:hover { text-decoration: underline; }
 .idea-card .status.in_progress { color: var(--warn); }
 .idea-card button { margin-top: 4px; }
 
+.ideas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.ideas-search {
+  flex: 1;
+  min-width: 160px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+}
+.ideas-search:focus { border-color: var(--accent); }
+.status-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.status-pill {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.status-pill:hover { border-color: var(--accent); color: var(--text); }
+.status-pill.active {
+  background: rgba(124, 92, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.status-pill .pill-count {
+  margin-left: 4px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.status-pill.active .pill-count { color: var(--accent); }
+.sort-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sort-select:focus { outline: none; border-color: var(--accent); }
+
 .empty-state {
   color: var(--text-dim);
   text-align: center;

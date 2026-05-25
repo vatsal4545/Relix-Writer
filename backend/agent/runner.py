@@ -255,35 +255,94 @@ def run_agent(*, user, planner=None, session=None, blog_idea=None, user_message:
                     })
 
                 elif btype == "server_tool_use":
-                    # Anthropic's built-in web_search runs server-side. Surface it.
+                    # Anthropic's built-in web_search runs server-side.
+                    # Surface the query so the user sees WHAT we're searching.
+                    raw_input = getattr(block, "input", {}) or {}
+                    if hasattr(raw_input, "model_dump"):
+                        raw_input = raw_input.model_dump()
+                    elif not isinstance(raw_input, dict):
+                        raw_input = dict(raw_input)
+                    server_id = getattr(block, "id", "server")
                     yield sse_event("tool_use_start", {
-                        "tool_name": getattr(block, "name", "server_tool"),
-                        "tool_use_id": getattr(block, "id", "server"),
+                        "tool_name": getattr(block, "name", "web_search"),
+                        "tool_use_id": server_id,
                         "server_side": True,
+                    })
+                    yield sse_event("tool_use_input", {
+                        "tool_use_id": server_id,
+                        "input": raw_input,
                     })
                     assistant_blocks.append({
                         "type": "server_tool_use",
-                        "id": getattr(block, "id", None),
+                        "id": server_id,
                         "name": getattr(block, "name", None),
-                        "input": getattr(block, "input", {}),
+                        "input": raw_input,
                     })
                     tools_called_log.append({
                         "name": getattr(block, "name", "web_search"),
-                        "input": getattr(block, "input", {}),
+                        "input": raw_input,
                         "server_side": True,
                     })
 
                 elif btype == "web_search_tool_result":
-                    # Result from the server-side web_search. Store as artifact.
+                    # Result from the server-side web_search. Extract a
+                    # citation-shaped list (title/url/snippet) so the UI can
+                    # render real links, and persist each result as an
+                    # Artifact for Message DNA back-references.
+                    from models import Artifact  # lazy
+
+                    raw_content = getattr(block, "content", None)
+                    results_payload = []
+                    error_payload = None
+
+                    def _get(item, key):
+                        """Read a field whether item is an SDK object or dict."""
+                        if isinstance(item, dict):
+                            return item.get(key)
+                        return getattr(item, key, None)
+
+                    if isinstance(raw_content, list):
+                        for item in raw_content:
+                            if _get(item, "type") == "web_search_result":
+                                results_payload.append({
+                                    "title": _get(item, "title"),
+                                    "url": _get(item, "url"),
+                                    "page_age": _get(item, "page_age"),
+                                })
+                    elif raw_content is not None and _get(raw_content, "type") == "web_search_tool_result_error":
+                        error_payload = {"error_code": _get(raw_content, "error_code") or "unknown"}
+
+                    # Persist results as Artifacts so Message DNA can link back.
+                    new_artifacts = []
+                    for r in results_payload:
+                        if r.get("url"):
+                            art = Artifact(
+                                session_id=session_id,
+                                type="web_search",
+                                content=r.get("title") or r["url"],
+                                source_url=r["url"],
+                            )
+                            db.session.add(art)
+                            new_artifacts.append(art)
+                    if new_artifacts:
+                        db.session.commit()
+                        artifact_ids.extend(a.id for a in new_artifacts)
+
+                    tool_use_id = getattr(block, "tool_use_id", "server")
                     yield sse_event("tool_result", {
-                        "tool_use_id": getattr(block, "tool_use_id", "server"),
-                        "output": {"summary": "web search results received"},
-                        "is_error": False,
+                        "tool_use_id": tool_use_id,
+                        "output": {
+                            "results": results_payload,
+                            "result_count": len(results_payload),
+                            "error": error_payload,
+                        },
+                        "is_error": error_payload is not None,
                     })
+
                     assistant_blocks.append({
                         "type": "web_search_tool_result",
-                        "tool_use_id": getattr(block, "tool_use_id", None),
-                        "content": getattr(block, "content", []),
+                        "tool_use_id": tool_use_id,
+                        "content": raw_content,
                     })
 
             messages.append({"role": "assistant", "content": assistant_blocks})

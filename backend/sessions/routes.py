@@ -1,5 +1,6 @@
 """Session endpoints.
 
+- GET    /api/sessions            -> list all of the user's sessions (sidebar)
 - POST   /api/sessions            -> create from blog_idea_id
 - GET    /api/sessions/:id        -> session + messages + artifacts
 - PATCH  /api/sessions/:id        -> manual edits to plan/content/status
@@ -24,6 +25,36 @@ def _owns_session(user, session: Session) -> bool:
     if idea is None:
         return False
     return idea.planner is not None and idea.planner.user_id == user.id
+
+
+@bp.get("/sessions")
+def list_sessions():
+    """List every session the current user owns, newest first.
+    Joins through blog_idea -> planner -> user so we don't expose other
+    users' work. Returns shallow rows (no plan/content bodies) for the
+    sidebar — fetch details via GET /api/sessions/:id."""
+    user, err = require_user()
+    if err:
+        return err
+    rows = (
+        db.session.query(Session, BlogIdea)
+        .join(BlogIdea, Session.blog_idea_id == BlogIdea.id)
+        .join(BlogIdea.planner)
+        .filter(BlogIdea.planner.has(user_id=user.id))
+        .order_by(Session.updated_at.desc(), Session.id.desc())
+        .all()
+    )
+    items = [
+        {
+            "id": s.id,
+            "blog_idea_id": s.blog_idea_id,
+            "title": idea.title,
+            "status": s.status,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+        }
+        for s, idea in rows
+    ]
+    return jsonify({"sessions": items})
 
 
 @bp.post("/sessions")

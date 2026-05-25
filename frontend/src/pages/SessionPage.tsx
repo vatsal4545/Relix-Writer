@@ -7,6 +7,7 @@ import TopBar from '../components/TopBar';
 import ChatPanel from '../components/Chat/ChatPanel';
 import PlanTab from '../components/Session/PlanTab';
 import ContentTab from '../components/Session/ContentTab';
+import SessionsSidebar from '../components/Session/SessionsSidebar';
 import { useAgentStream, historyToChatMessages } from '../hooks/useAgentStream';
 
 interface SessionDetail {
@@ -51,10 +52,12 @@ export default function SessionPage() {
         setPlan(data.plan || '');
         setTab('plan');
         qc.invalidateQueries({ queryKey: ['session', sessionId] });
+        qc.invalidateQueries({ queryKey: ['sessions-list'] });
       } else if (resource === 'session_content' && data?.session_id === sessionId) {
         setContent(data.content || '');
         setTab('content');
         qc.invalidateQueries({ queryKey: ['session', sessionId] });
+        qc.invalidateQueries({ queryKey: ['sessions-list'] });
       }
     }
     window.addEventListener('relix:artifact', onArtifact);
@@ -102,7 +105,8 @@ export default function SessionPage() {
           </Link>
         }
       />
-      <div className="body">
+      <div className="body session-body">
+        <SessionsSidebar activeId={sessionId} />
         <ChatPanel
           title={blog_idea.title}
           emptyHint="Discuss the post. Ask Relix to draft a plan, then to write the full post."

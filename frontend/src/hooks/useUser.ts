@@ -22,7 +22,10 @@ export function useLogout() {
   const qc = useQueryClient();
   return async () => {
     await api('/api/auth/logout', { method: 'POST' });
+    // Hard-clear the cache: invalidate only marks queries stale, so the
+    // *next* user briefly sees the previous user's cached data while the
+    // refetch is in flight. clear() drops every entry.
+    qc.clear();
     qc.setQueryData(['me'], null);
-    qc.invalidateQueries();
   };
 }

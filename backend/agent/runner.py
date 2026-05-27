@@ -10,9 +10,12 @@ with that result in the messages array. So we:
   -> call again -> ... -> stop_reason == 'end_turn'
 """
 import os
+import random
+import time
 from typing import Optional
 
 from anthropic import Anthropic
+from anthropic import APIStatusError, APIConnectionError, RateLimitError
 
 from extensions import db
 from .sse import sse_event
@@ -42,6 +45,49 @@ def get_client() -> Anthropic:
 
 MODEL = "claude-sonnet-4-5-20250929"
 MAX_LOOP_ITERATIONS = 8  # safety net against runaway tool use
+
+# Retry policy for transient Anthropic errors (529 overloaded, 503, 5xx, rate limits).
+RETRYABLE_STATUS = {429, 500, 502, 503, 504, 529}
+MAX_RETRIES = 4
+BASE_BACKOFF_SECONDS = 1.5
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, (APIConnectionError, RateLimitError)):
+        return True
+    if isinstance(exc, APIStatusError):
+        return getattr(exc, "status_code", None) in RETRYABLE_STATUS
+    return False
+
+
+def _stream_with_retry(client, *, system_prompt, messages, tools):
+    """Open a streaming Claude call, retrying on transient errors with
+    exponential backoff + jitter. Yields (chunk, final_response) where
+    chunk is a text delta during streaming and final_response is set
+    once on the last yield after the stream closes."""
+    last_exc: Optional[Exception] = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with client.messages.stream(
+                model=MODEL,
+                max_tokens=4096,
+                system=system_prompt,
+                messages=messages,
+                tools=tools,
+            ) as stream:
+                for chunk in stream.text_stream:
+                    if chunk:
+                        yield chunk, None
+                yield None, stream.get_final_message()
+                return
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if attempt >= MAX_RETRIES or not _is_retryable(exc):
+                raise
+            sleep_s = BASE_BACKOFF_SECONDS * (2 ** attempt) + random.uniform(0, 0.5)
+            time.sleep(sleep_s)
+    if last_exc:  # pragma: no cover — defensive
+        raise last_exc
 
 
 def _load_history(user_id: int, *, session_id: Optional[int]):
@@ -175,13 +221,22 @@ def run_agent(*, user, planner=None, session=None, blog_idea=None, user_message:
 
     try:
         for _ in range(MAX_LOOP_ITERATIONS):
-            response = client.messages.create(
-                model=MODEL,
-                max_tokens=4096,
-                system=system_prompt,
+            # Stream tokens out of Claude as they arrive so the UI sees
+            # text appear progressively instead of in one big chunk.
+            # _stream_with_retry handles transient 529/5xx/rate-limits.
+            response = None
+            for chunk, final in _stream_with_retry(
+                client,
+                system_prompt=system_prompt,
                 messages=messages,
                 tools=tools,
-            )
+            ):
+                if chunk is not None:
+                    yield sse_event("text", {"delta": chunk})
+                if final is not None:
+                    response = final
+            if response is None:
+                raise RuntimeError("Claude stream ended without a final message")
 
             assistant_blocks = []
             tool_result_blocks_for_next_turn = []
@@ -190,7 +245,8 @@ def run_agent(*, user, planner=None, session=None, blog_idea=None, user_message:
                 btype = getattr(block, "type", None)
 
                 if btype == "text":
-                    yield sse_event("text", {"delta": block.text})
+                    # Text was already streamed above; just record it for
+                    # history + final persistence. Do NOT re-yield.
                     assistant_blocks.append({"type": "text", "text": block.text})
                     final_text_chunks.append(block.text)
 
@@ -373,6 +429,22 @@ def run_agent(*, user, planner=None, session=None, blog_idea=None, user_message:
             "context_used": context_used,
         })
 
+    except APIStatusError as exc:
+        db.session.rollback()
+        status = getattr(exc, "status_code", None)
+        if status == 529 or status == 503:
+            msg = "Claude is overloaded right now. Please try again in a moment."
+        elif status == 429:
+            msg = "Rate limit hit. Please wait a few seconds and retry."
+        else:
+            msg = f"Claude API error ({status}). Please try again."
+        yield sse_event("error", {"message": msg, "status": status, "retryable": True})
+    except APIConnectionError:
+        db.session.rollback()
+        yield sse_event("error", {
+            "message": "Couldn't reach Claude. Check your network and retry.",
+            "retryable": True,
+        })
     except Exception as exc:
         db.session.rollback()
         yield sse_event("error", {"message": str(exc)})

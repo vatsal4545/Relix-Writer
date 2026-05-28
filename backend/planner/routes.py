@@ -7,7 +7,7 @@
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
 from extensions import db
-from models import BlogIdea, Message, Planner
+from models import Artifact, BlogIdea, Message, Planner, Session
 from auth.routes import require_user
 from agent.runner import run_agent
 from agent.sse import sse_event
@@ -40,6 +40,36 @@ def get_planner():
         "planner": planner.to_dict(),
         "blog_ideas": [i.to_dict() for i in ideas],
     })
+
+
+@bp.delete("/blog_ideas/<int:idea_id>")
+def delete_blog_idea(idea_id: int):
+    """Delete a blog idea card and cascade to its sessions, messages,
+    and artifacts. Only the owner can delete."""
+    user, err = require_user()
+    if err:
+        return err
+    idea = db.session.get(BlogIdea, idea_id)
+    if idea is None or idea.planner is None or idea.planner.user_id != user.id:
+        return jsonify({"error": "blog idea not found"}), 404
+
+    # Find every session attached to this idea, then wipe their child rows
+    # (messages + artifacts) before deleting the sessions themselves.
+    session_ids = [s.id for s in Session.query.filter_by(blog_idea_id=idea.id).all()]
+    if session_ids:
+        Message.query.filter(Message.session_id.in_(session_ids)).delete(
+            synchronize_session=False
+        )
+        Artifact.query.filter(Artifact.session_id.in_(session_ids)).delete(
+            synchronize_session=False
+        )
+        Session.query.filter(Session.id.in_(session_ids)).delete(
+            synchronize_session=False
+        )
+
+    db.session.delete(idea)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @bp.get("/messages")

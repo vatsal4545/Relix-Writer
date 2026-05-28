@@ -429,6 +429,30 @@ def run_agent(*, user, planner=None, session=None, blog_idea=None, user_message:
             "context_used": context_used,
         })
 
+    except GeneratorExit:
+        # Client aborted the SSE connection (Stop button). Save whatever
+        # partial text we already streamed so the chat history is consistent,
+        # then re-raise so Flask can close the stream cleanly.
+        try:
+            partial_text = "".join(final_text_chunks)
+            if partial_text or tools_called_log:
+                context_used = _build_context_used(
+                    user, history, tools_called_log, artifact_ids
+                )
+                context_used["stopped_by_user"] = True
+                partial = Message(
+                    session_id=session_id,
+                    user_id=user.id,
+                    role="assistant",
+                    content=(partial_text + "\n\n_[stopped by user]_").strip(),
+                    context_used=context_used,
+                )
+                db.session.add(partial)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        raise
+
     except APIStatusError as exc:
         db.session.rollback()
         status = getattr(exc, "status_code", None)

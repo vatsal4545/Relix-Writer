@@ -10,10 +10,11 @@ interface Props {
   messages: ChatMessage[];
   streaming: boolean;
   onSend: (text: string) => void;
+  onStop?: () => void;
   disabled?: boolean;
 }
 
-export default function ChatPanel({ title, emptyHint, messages, streaming, onSend, disabled }: Props) {
+export default function ChatPanel({ title, emptyHint, messages, streaming, onSend, onStop, disabled }: Props) {
   const [input, setInput] = useState('');
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -87,9 +88,20 @@ export default function ChatPanel({ title, emptyHint, messages, streaming, onSen
           disabled={disabled || streaming}
           rows={2}
         />
-        <button onClick={send} disabled={!input.trim() || streaming || disabled}>
-          {streaming ? 'Working…' : 'Send'}
-        </button>
+        {streaming && onStop ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="chat-stop-btn"
+            title="Stop generating"
+          >
+            Stop
+          </button>
+        ) : (
+          <button onClick={send} disabled={!input.trim() || streaming || disabled}>
+            Send
+          </button>
+        )}
       </div>
     </div>
   );

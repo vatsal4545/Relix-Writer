@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 
 interface SidebarSession {
@@ -16,6 +16,8 @@ interface SidebarSession {
  * session entries with the active one highlighted.
  */
 export default function SessionsSidebar({ activeId }: { activeId?: number }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data, isLoading } = useQuery({
     queryKey: ['sessions-list'],
     queryFn: () => api<{ sessions: SidebarSession[] }>('/api/sessions'),
@@ -23,6 +25,28 @@ export default function SessionsSidebar({ activeId }: { activeId?: number }) {
   });
 
   const sessions = data?.sessions || [];
+
+  const deleteSession = useMutation({
+    mutationFn: async (id: number) =>
+      api<{ ok: true }>(`/api/sessions/${id}`, { method: 'DELETE' }),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['sessions-list'] });
+      qc.invalidateQueries({ queryKey: ['planner'] });
+      // If user just deleted the session they're viewing, bounce to planner.
+      if (id === activeId) navigate('/planner');
+    },
+  });
+
+  function handleDelete(e: React.MouseEvent, s: SidebarSession) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (deleteSession.isPending) return;
+    const ok = window.confirm(
+      `Delete session "${s.title}"? Chat history and any draft for it will be lost.`
+    );
+    if (!ok) return;
+    deleteSession.mutate(s.id);
+  }
 
   return (
     <aside className="sessions-sidebar">
@@ -50,6 +74,16 @@ export default function SessionsSidebar({ activeId }: { activeId?: number }) {
             <div className={`sidebar-item-status status-${s.status}`}>
               {s.status.replace('_', ' ')}
             </div>
+            <button
+              type="button"
+              className="sidebar-item-delete"
+              title="Delete session"
+              aria-label="Delete session"
+              onClick={(e) => handleDelete(e, s)}
+              disabled={deleteSession.isPending}
+            >
+              ×
+            </button>
           </Link>
         ))}
       </div>

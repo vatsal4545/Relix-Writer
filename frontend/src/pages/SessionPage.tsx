@@ -21,7 +21,7 @@ export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const sessionId = Number(id);
   const qc = useQueryClient();
-  const { messages, streaming, send, reset } = useAgentStream();
+  const { messages, streaming, send, stop, reset } = useAgentStream();
   const [tab, setTab] = useState<'plan' | 'content'>('plan');
   // Local mirrors of plan/content so live SSE updates render instantly
   // without a refetch round-trip.
@@ -113,6 +113,7 @@ export default function SessionPage() {
           messages={messages}
           streaming={streaming}
           onSend={onSend}
+          onStop={stop}
         />
         <div className="workspace-panel">
           <div className="workspace-header">

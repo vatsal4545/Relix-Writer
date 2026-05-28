@@ -11,7 +11,7 @@ type StatusFilter = 'all' | 'idea' | 'in_progress' | 'completed';
 type SortOrder = 'newest' | 'oldest' | 'status';
 
 export default function PlannerPage() {
-  const { messages, streaming, send, reset } = useAgentStream();
+  const { messages, streaming, send, stop, reset } = useAgentStream();
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
@@ -104,6 +104,7 @@ export default function PlannerPage() {
           messages={messages}
           streaming={streaming}
           onSend={onSend}
+          onStop={stop}
         />
         <div className="workspace-panel">
           <div className="workspace-header">

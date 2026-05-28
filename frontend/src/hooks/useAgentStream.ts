@@ -30,6 +30,7 @@ interface UseAgentStreamResult {
   messages: ChatMessage[];
   streaming: boolean;
   send: (opts: SendOptions, userText: string) => Promise<void>;
+  stop: () => void;
   reset: (initial?: ChatMessage[]) => void;
 }
 
@@ -44,9 +45,15 @@ export function useAgentStream(): UseAgentStreamResult {
   // We need a stable reference to "the assistant message currently being built"
   // because state updates inside the read loop can race otherwise.
   const currentAssistantIdRef = useRef<string | null>(null);
+  // AbortController for the in-flight fetch so the Stop button can cancel it.
+  const abortRef = useRef<AbortController | null>(null);
 
   const reset = useCallback((initial: ChatMessage[] = []) => {
     setMessages(initial);
+  }, []);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
   }, []);
 
   const send = useCallback(
@@ -69,12 +76,16 @@ export function useAgentStream(): UseAgentStreamResult {
       setMessages((m) => [...m, userMsg, assistantMsg]);
       setStreaming(true);
 
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
         const res = await fetch(endpoint, {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: controller.signal,
         });
         if (!res.ok || !res.body) {
           throw new Error(`HTTP ${res.status}`);
@@ -100,10 +111,17 @@ export function useAgentStream(): UseAgentStreamResult {
           }
         }
       } catch (err: any) {
+        const wasAborted = err?.name === 'AbortError' || controller.signal.aborted;
         setMessages((all) =>
           all.map((m) =>
             m.id === assistantId
-              ? { ...m, content: (m.content || '') + `\n\n[error: ${err.message || err}]`, streaming: false }
+              ? {
+                  ...m,
+                  content:
+                    (m.content || '') +
+                    (wasAborted ? '\n\n_[stopped by user]_' : `\n\n[error: ${err.message || err}]`),
+                  streaming: false,
+                }
               : m
           )
         );
@@ -113,12 +131,13 @@ export function useAgentStream(): UseAgentStreamResult {
         );
         setStreaming(false);
         currentAssistantIdRef.current = null;
+        abortRef.current = null;
       }
     },
     [queryClient]
   );
 
-  return { messages, streaming, send, reset };
+  return { messages, streaming, send, stop, reset };
 }
 
 function parseSseFrame(raw: string): AgentEvent | null {
